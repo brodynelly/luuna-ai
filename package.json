@@ -1,0 +1,19 @@
+{
+  "name": "luuna-ai",
+  "version": "1.0.2",
+  "description": "LUUNA-AI desktop — Turbo Pascal 7 / DOS styled native frontend for the Pi coding agent",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "check": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

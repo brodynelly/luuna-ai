@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+	<title>LUUNA-AI 1.0.2 Beta</title>
+	<link rel="stylesheet" href="renderer.css" />
+</head>
+<body>
+	<div id="menubar" role="menubar"></div>
+
+	<div id="desktop">
+		<section id="win-tree" class="window">
+			<div class="win-close" data-win="tree" title="Reload file tree">■</div>
+			<div class="win-zoom" data-win="tree" title="Zoom / restore">▲</div>
+			<div class="win-title"><span class="win-name">FILES</span></div>
+			<div class="win-body" id="tree-body" tabindex="0"></div>
+		</section>
+
+		<section id="win-agent" class="window">
+			<div class="win-close" data-win="agent" title="Clear agent view">■</div>
+			<div class="win-zoom" data-win="agent" title="Zoom / restore">▲</div>
+			<div class="win-title"><span class="win-name">AGENT</span></div>
+			<div class="win-body" id="agent-body" tabindex="0"></div>
+			<div class="win-linecounter" id="agent-linecounter"> 1:1 </div>
+		</section>
+
+		<section id="win-input" class="window">
+			<div class="win-zoom" data-win="agent" title="Zoom agent window">▲</div>
+			<div class="win-title"><span class="win-name" id="input-title">MESSAGE</span></div>
+			<div class="win-body input-wrap" id="input-wrap">
+				<pre id="input-mirror" aria-hidden="true"></pre>
+				<textarea id="input-textarea" spellcheck="false" wrap="off"></textarea>
+			</div>
+		</section>
+	</div>
+
+	<div id="keybar"></div>
+	<div id="overlay-root"></div>
+
+	<script src="luuna-provider.js"></script>
+	<script src="renderer.js"></script>
+</body>
+</html>

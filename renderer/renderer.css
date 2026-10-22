@@ -1,0 +1,461 @@
+/* ==========================================================================
+   LUUNA-AI Desktop — Turbo Pascal 7.0 / DOS VGA aesthetic
+   Classic 16-color palette on a royal-blue desktop.
+   ========================================================================== */
+
+:root {
+	/* DOS/VGA 16-color palette */
+	--black: #000000;
+	--blue: #0000AA;
+	--green: #00AA00;
+	--cyan: #00AAAA;
+	--red: #AA0000;
+	--magenta: #AA00AA;
+	--brown: #AA5500;
+	--lgray: #AAAAAA;
+	--dgray: #555555;
+	--lblue: #5555FF;
+	--lgreen: #55FF55;
+	--lcyan: #55FFFF;
+	--lred: #FF5555;
+	--lmagenta: #FF55FF;
+	--yellow: #FFFF55;
+	--white: #FFFFFF;
+
+	--font: "Consolas", "Lucida Console", "Courier New", monospace;
+	--fs: 14px;
+	--lh: 1.25;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+}
+
+body {
+	background: var(--blue);
+	color: var(--lgray);
+	font-family: var(--font);
+	font-size: var(--fs);
+	line-height: var(--lh);
+	display: flex;
+	flex-direction: column;
+	user-select: none;
+	cursor: default;
+}
+
+/* ------------------------------------------------------------------- chrome */
+
+/* The window has NO chrome at all. Tauri creates it with `decorations: false`,
+   so the OS draws no title bar and no caption buttons, and the app no longer
+   draws a caption strip of its own either. The UI starts at the very top edge
+   with the DOS menu bar.
+
+   Window affordances live in the menu bar instead:
+     - drag the window by its background (luuna-provider.js calls startDragging),
+       including by the flex spacer after "Help";
+     - double-click it to toggle maximize;
+     - Alt+X exits, and File > Exit closes (both go through luuna.exit).
+   The key bar (bottom) and overlay dialogs are unaffected. */
+
+/* ------------------------------------------------------------------ menubar */
+
+#menubar {
+	flex: 0 0 auto;
+	background: var(--lgray);
+	color: var(--black);
+	padding: 1px 8px;
+	white-space: nowrap;
+	overflow: hidden;
+	z-index: 30;
+	position: relative;
+	/* The only window-chrome surface left: dragging the menu bar background moves
+	   the window (luuna-provider.js wires startDragging on it). Menu items opt
+	   out via .menu-item so a press on them opens a menu instead. */
+	-webkit-app-region: drag;
+	user-select: none;
+}
+
+/* Real menu items must not start a window drag. */
+.menu-item {
+	display: inline-block;
+	padding: 0 5px 0 3px;
+	cursor: default;
+	-webkit-app-region: no-drag;
+}
+
+.menu-item .mn { color: var(--red); }
+.menu-item.open, .menu-item.highlight { background: var(--green); }
+.menu-item.open .mn, .menu-item.highlight .mn { color: var(--red); }
+
+.dropdown {
+	position: fixed;
+	min-width: 240px;
+	background: var(--lgray);
+	color: var(--black);
+	border: 1px solid var(--black);
+	box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.55);
+	z-index: 100;
+	padding: 1px;
+}
+
+.dropdown .row {
+	display: flex;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 1px 10px 1px 12px;
+	white-space: nowrap;
+}
+
+.dropdown .row .mn { color: var(--red); }
+.dropdown .row .sc { color: var(--dgray); margin-left: 28px; }
+.dropdown .row.sel, .dropdown .row:hover { background: var(--green); }
+.dropdown .row.sel .sc, .dropdown .row:hover .sc { color: var(--black); }
+.dropdown .row.sel .mn, .dropdown .row:hover .mn { color: var(--red); }
+
+.dropdown .sep {
+	border-top: 1px solid var(--dgray);
+	margin: 2px 4px;
+}
+
+/* ------------------------------------------------------------------ desktop */
+
+#desktop {
+	flex: 1 1 auto;
+	display: grid;
+	grid-template-columns: minmax(170px, 26%) 1fr;
+	grid-template-rows: minmax(0, 1.6fr) auto;
+	gap: 6px;
+	padding: 6px;
+	min-height: 0;
+}
+
+#desktop.zoom-agent #win-tree, #desktop.zoom-agent #win-input { display: none; }
+#desktop.zoom-agent { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+#desktop.zoom-agent #win-agent { grid-column: 1; grid-row: 1; }
+
+#desktop.zoom-tree #win-agent, #desktop.zoom-tree #win-input { display: none; }
+#desktop.zoom-tree { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+#desktop.zoom-tree #win-tree { grid-column: 1; grid-row: 1; }
+
+/* ------------------------------------------------------------------ windows */
+
+.window {
+	position: relative;
+	border: 4px double var(--lgray);
+	background: var(--blue);
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+}
+
+.window.focused { border-color: var(--white); }
+
+.win-title {
+	position: absolute;
+	top: -12px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: var(--blue);
+	color: var(--lgray);
+	padding: 0 8px;
+	white-space: nowrap;
+	max-width: 86%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	z-index: 2;
+}
+
+.window.focused .win-title { color: var(--yellow); }
+
+.win-close, .win-zoom {
+	position: absolute;
+	top: -11px;
+	background: var(--blue);
+	padding: 0 5px;
+	z-index: 3;
+	cursor: pointer;
+	color: var(--lgray);
+}
+
+.window.focused .win-close { color: var(--lgreen); }
+.window.focused .win-zoom { color: var(--lcyan); }
+.win-close:hover, .win-zoom:hover { background: var(--green); color: var(--white); }
+
+.win-close { left: 8px; }
+.win-zoom { right: 8px; }
+
+.win-body {
+	flex: 1 1 auto;
+	overflow: auto;
+	margin: 2px 2px 2px 2px;
+	padding: 1px 2px;
+	min-height: 0;
+	outline: none;
+	white-space: pre;
+}
+
+.win-linecounter {
+	position: absolute;
+	bottom: -10px;
+	left: 24px;
+	background: var(--blue);
+	color: var(--white);
+	padding: 0 6px;
+	z-index: 2;
+}
+
+/* DOS-style scrollbars */
+.win-body::-webkit-scrollbar { width: 14px; height: 12px; }
+.win-body::-webkit-scrollbar-track { background: var(--blue); border: 1px solid var(--lblue); }
+.win-body::-webkit-scrollbar-thumb { background: var(--lgray); border: 1px solid var(--white); }
+.win-body::-webkit-scrollbar-button:single-button {
+	background: var(--blue);
+	border: 1px solid var(--lblue);
+	color: var(--lcyan);
+	display: block;
+	height: 12px;
+	width: 12px;
+}
+.win-body::-webkit-scrollbar-corner { background: var(--blue); }
+
+/* ------------------------------------------------------------------ tree */
+
+.trow { display: block; padding: 0 4px; white-space: pre; cursor: default; }
+.trow .twist { color: var(--white); }
+.trow .dname { color: var(--white); }
+.trow .fname { color: var(--lgray); }
+.trow .dirty { color: var(--yellow); }
+.trow .fcount { color: var(--lcyan); }
+
+#win-tree.focused .trow.sel { background: var(--green); color: var(--white); }
+#win-tree.focused .trow.sel .fname { color: var(--white); }
+#win-tree:not(.focused) .trow.sel { background: var(--dgray); color: var(--white); }
+
+/* ------------------------------------------------------------------ agent panel */
+
+.entry-user .prompt { color: var(--yellow); }
+.entry-user .text { color: var(--white); user-select: text; }
+.entry-thinking { color: var(--lgray); user-select: text; }
+.entry-agent { color: var(--white); user-select: text; }
+.entry-agent .mdhead { color: var(--yellow); }
+.entry-agent .codekw { color: var(--yellow); }
+.entry-agent .codestr { color: var(--lcyan); }
+.entry-agent .codenum { color: var(--lmagenta); }
+.entry-agent .codecom { color: var(--dgray); }
+.entry-tool .tag { color: var(--lcyan); }
+.entry-tool .tag-write { color: var(--yellow); }
+.entry-tool .tag-bash { color: var(--lmagenta); }
+.entry-tool .tag-ok { color: var(--lgreen); }
+.entry-error .tag, .entry-error .text { color: var(--lred); }
+.entry-info { color: var(--dgray); }
+
+.streamline-thinking { color: var(--lgray); }
+.thinking-indicator { color: var(--lgray); }
+
+/* ------------------------------------------------------------------ input window */
+
+#win-input { grid-column: 2; grid-row: 2; }
+#win-tree { grid-column: 1; grid-row: 1 / span 2; }
+#win-agent { grid-column: 2; grid-row: 1; }
+
+.input-wrap { position: relative; overflow: hidden; }
+
+#input-mirror {
+	margin: 0;
+	padding: 1px 2px;
+	white-space: pre;
+	font-family: var(--font);
+	font-size: var(--fs);
+	line-height: var(--lh);
+	color: var(--white);
+	overflow: hidden;
+	min-height: 100%;
+}
+
+#input-mirror .prompt { color: var(--yellow); }
+#input-mirror .cont { color: var(--blue); }
+
+#input-textarea {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	background: transparent;
+	color: transparent;
+	caret-color: var(--white);
+	border: none;
+	outline: none;
+	resize: none;
+	margin: 0;
+	padding: 1px 2px;
+	font-family: var(--font);
+	font-size: var(--fs);
+	line-height: var(--lh);
+	white-space: pre;
+	overflow: auto;
+}
+
+#input-textarea::selection { background: var(--cyan); color: var(--blue); }
+#input-textarea::-webkit-scrollbar { display: none; }
+
+/* ------------------------------------------------------------------ keybar */
+
+#keybar {
+	flex: 0 0 auto;
+	background: var(--lgray);
+	color: var(--black);
+	padding: 1px 8px;
+	white-space: nowrap;
+	overflow: hidden;
+	position: relative;
+	z-index: 30;
+}
+
+#keybar .key { color: var(--red); }
+#keybar .flash { color: var(--brown); font-weight: bold; }
+#keybar .hintlabel .key { color: var(--red); }
+#keybar .sep { color: var(--dgray); }
+
+#keybar .thinkbadge {
+	position: absolute;
+	right: 8px;
+	top: 1px;
+	background: var(--black);
+	color: var(--yellow);
+	padding: 0 6px;
+}
+
+/* ------------------------------------------------------------------ dialogs */
+
+#overlay-root { position: fixed; inset: 0; z-index: 200; pointer-events: none; }
+
+.dialog-backdrop {
+	position: absolute;
+	inset: 0;
+	pointer-events: auto;
+}
+
+.dialog {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	background: var(--lgray);
+	color: var(--black);
+	border: 4px double var(--white);
+	box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55);
+	min-width: 380px;
+	max-width: 86vw;
+	max-height: 82vh;
+	display: flex;
+	flex-direction: column;
+	pointer-events: auto;
+}
+
+.dialog .dlg-title {
+	background: var(--lgray);
+	color: var(--white);
+	margin-top: -11px;
+	align-self: center;
+	padding: 0 10px;
+	max-width: 80%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.dialog .dlg-close {
+	position: absolute;
+	top: -11px;
+	left: 10px;
+	background: var(--lgray);
+	color: var(--lgreen);
+	padding: 0 5px;
+	cursor: pointer;
+}
+
+.dialog .dlg-body {
+	padding: 12px 14px;
+	overflow: auto;
+	white-space: pre;
+	font-size: var(--fs);
+	min-height: 0;
+}
+
+.dialog .dlg-body::-webkit-scrollbar { width: 12px; }
+.dialog .dlg-body::-webkit-scrollbar-track { background: var(--lgray); border: 1px solid var(--dgray); }
+.dialog .dlg-body::-webkit-scrollbar-thumb { background: var(--dgray); }
+
+.dialog .dlg-buttons {
+	display: flex;
+	justify-content: center;
+	gap: 18px;
+	padding: 4px 10px 12px;
+}
+
+.dlg-btn {
+	background: var(--green);
+	color: var(--black);
+	padding: 1px 22px;
+	border: 1px solid var(--black);
+	box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+	cursor: pointer;
+	white-space: pre;
+}
+
+.dlg-btn:hover { color: var(--white); }
+.dlg-btn .k { color: var(--yellow); }
+
+.dialog .listrow { display: flex; gap: 10px; padding: 0 6px; white-space: pre; }
+.dialog .listrow.sel { background: var(--green); color: var(--white); }
+.dialog .listrow .num { color: var(--red); }
+.dialog .listrow.sel .num { color: var(--red); }
+.dialog .listrow .sub { color: var(--dgray); }
+.dialog .listrow.sel .sub { color: var(--black); }
+
+.dialog .dline { white-space: pre; }
+.dialog .dline.k { color: var(--red); }
+.dialog .dline.dim { color: var(--dgray); }
+.dialog .dline.head { color: var(--brown); font-weight: bold; }
+
+/* diff viewer colors */
+.dialog .diff-plus { color: var(--lgreen); }
+.dialog .diff-minus { color: var(--lred); }
+.dialog .diff-hunk { color: var(--lcyan); }
+.dialog .diff-meta { color: var(--yellow); }
+.dialog .diff-ctx { color: var(--black); }
+
+/* prompt dialog input */
+.dialog .dlg-input {
+	font-family: var(--font);
+	font-size: var(--fs);
+	background: var(--blue);
+	color: var(--yellow);
+	border: 1px solid var(--dgray);
+	outline: none;
+	padding: 2px 6px;
+	width: 100%;
+	white-space: pre;
+}
+
+.dialog .dlg-field { display: flex; gap: 8px; align-items: center; margin: 3px 0; white-space: pre; }
+.dialog .dlg-field .flabel { width: 130px; color: var(--dgray); }
+.dialog .dlg-field.focused .flabel { color: var(--black); }
+.dialog .dlg-field .fvalue {
+	flex: 1;
+	background: var(--blue);
+	color: var(--white);
+	padding: 1px 6px;
+	min-height: 20px;
+	white-space: pre;
+	overflow: hidden;
+}
+.dialog .dlg-field.focused .fvalue { color: var(--yellow); outline: 1px solid var(--dgray); }
+
+/* boot error box */
+.boot-error { color: var(--lred); }

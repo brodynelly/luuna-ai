@@ -1,0 +1,21 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "Core permissions for the LUUNA-AI main window. The window is frameless (decorations: false), so the DOS caption strip drives minimize / maximize / close / drag from the renderer via window.__TAURI__.window.getCurrentWindow(). Those commands are NOT part of the core:window `default` permission set, so they must be granted explicitly or they reject at runtime.",
+	"windows": ["main"],
+	"permissions": [
+		"core:default",
+		"core:window:allow-minimize",
+		"core:window:allow-unminimize",
+		"core:window:allow-toggle-maximize",
+		"core:window:allow-maximize",
+		"core:window:allow-unmaximize",
+		"core:window:allow-is-maximized",
+		"core:window:allow-close",
+		"core:window:allow-start-dragging",
+		"core:window:allow-start-resize-dragging",
+		"core:window:allow-set-title",
+		"core:window:allow-show",
+		"core:window:allow-set-focus"
+	]
+}
