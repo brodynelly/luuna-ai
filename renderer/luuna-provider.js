@@ -15,6 +15,9 @@
 
 	window.luuna = {
 		boot: () => invoke("luuna_boot"),
+		workbenchStatus: () => invoke("luuna_workbench_status"),
+		workbenchInitialize: (projectKey) => invoke("luuna_workbench_initialize", { projectKey }),
+		workbenchAction: (projectKey, action) => invoke("luuna_workbench_action", { projectKey, action }),
 		getState: () => invoke("luuna_get_state"),
 		getStats: () => invoke("luuna_get_stats"),
 		prompt: (text) => invoke("luuna_prompt", { text }),

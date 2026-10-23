@@ -1,0 +1,33 @@
+﻿.wb-window { position: fixed; inset: 36px 18px 32px; z-index: 900; border: 4px double var(--white); box-shadow: 8px 8px var(--black); background: var(--blue); color: var(--white); display: flex; flex-direction: column; padding: 10px; min-height: 0; }
+.wb-window[hidden] { display: none; }
+.wb-window header, .wb-window nav, .wb-toolbar, .wb-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.wb-window header { justify-content: space-between; color: var(--yellow); }
+.wb-project { color: var(--lcyan); padding: 8px 0; overflow-wrap: anywhere; }
+.wb-window button { background: var(--lgray); color: var(--black); border: 2px outset var(--white); padding: 5px 9px; font: inherit; cursor: pointer; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.wb-window button:focus, .wb-window button.selected { background: var(--cyan); outline: 2px solid var(--yellow); }
+.wb-window button:disabled { color: var(--dgray); cursor: wait; }
+.wb-window input, .wb-window select, .wb-window textarea { width: 100%; min-width: 0; background: var(--black); color: var(--yellow); font: inherit; border: 1px solid var(--lgray); padding: 6px; user-select: text; }
+.wb-window input:focus, .wb-window select:focus, .wb-window textarea:focus { outline: 2px solid var(--lcyan); }
+.wb-window textarea { min-height: 100px; resize: vertical; white-space: pre-wrap; }
+.wb-body { overflow: auto; min-height: 0; flex: 1; padding: 6px; }
+.wb-notice { padding: 8px 0; color: var(--lcyan); min-height: 34px; }
+.wb-error, .wb-blocked { color: var(--yellow); }
+.wb-error { border-bottom: 2px solid var(--lred); }
+.wb-board { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.wb-column { border: 1px solid var(--lgray); padding: 8px; min-width: 0; }
+.wb-column h3 { color: var(--yellow); margin: 4px 0 12px; }
+.wb-card { border: 1px solid var(--cyan); padding: 10px; margin-bottom: 10px; overflow-wrap: anywhere; }
+.wb-card > button { display: block; width: 100%; margin-bottom: 8px; }
+.wb-card small { color: var(--lcyan); display: block; }
+.wb-card p { margin: 8px 0; }
+.wb-toolbar { margin-bottom: 14px; }
+.wb-toolbar h2 { margin: 8px 14px 8px 0; }
+.wb-toolbar .wb-field { flex: 1 1 150px; }
+.wb-field { display: block; margin: 8px 0; color: var(--lcyan); }
+.wb-field > input, .wb-field > select, .wb-field > textarea { display: block; margin-top: 4px; }
+.wb-form { max-width: 900px; margin: 0 auto; }
+.wb-form h2 { color: var(--yellow); overflow-wrap: anywhere; }
+.wb-preview { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; background: var(--black); color: var(--lgray); border: 1px solid var(--cyan); padding: 12px; }
+.wb-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.wb-confirm { border: 2px solid var(--yellow); padding: 12px; margin-top: 12px; }
+@media (max-width: 800px) { .wb-window { inset: 30px 6px 26px; padding: 6px; } .wb-board { gap: 6px; } .wb-card, .wb-column { padding: 6px; } .wb-list { grid-template-columns: 1fr; } .wb-window button { padding: 5px; } }

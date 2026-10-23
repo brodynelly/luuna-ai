@@ -64,6 +64,10 @@ const MAIN_MENUS = [
 		{ label: "Refresh git status", mnemonic: "R", action: "git.refresh", hint: "Rescan git status and dirty file markers" },
 	] },
 	{ title: "Tools", mnemonic: "T", hint: "Session statistics, session rename, and environment metrics", items: [
+		{ label: "Kanban board...", mnemonic: "K", action: "workbench.tickets", hint: "Manage standalone Missions tickets" },
+		{ label: "Prompt library...", mnemonic: "P", action: "workbench.prompts", hint: "Compose and version Beacon prompts" },
+		{ label: "Expertise memory...", mnemonic: "X", action: "workbench.memory", hint: "Capture and search project Atlas expertise" },
+		{ separator: true },
 		{ label: "Session statistics...", mnemonic: "S", action: "tools.stats", hint: "Display token usage, context usage, and cost" },
 		{ label: "Rename session...", mnemonic: "N", action: "tools.rename", hint: "Set a custom display name for the current session" },
 		{ separator: true },
@@ -122,6 +126,7 @@ const HELP_LINES = [
 const GUIDE_LINES = [
 	"LUUNA-AI User & Command Guide",
 	"═══════════════════════════════════════════",
+	"Workbench: Tools > Kanban, Prompt library, Expertise memory. Explicit initialization and draft insertion.",
 	"Primary commands:",
 	"  F1          Open keyboard help",
 	"  F2          Save conversation transcript",
@@ -330,6 +335,7 @@ function menuCurrentItem() {
 // ---------------------------------------------------------------------------
 
 function dispatchCommand(command) {
+	if (command.startsWith("workbench.")) { closeMenus(); window.luunaWorkbench.open(command.split(".")[1]); return; }
 	if (command.startsWith("file.recent:")) {
 		const idx = Number.parseInt(command.slice("file.recent:".length), 10);
 		const session = state.recentSessions[idx];
@@ -1537,6 +1543,10 @@ window.addEventListener("keyup", (e) => {
 window.addEventListener("blur", () => { altPendingSince = 0; });
 
 window.addEventListener("keydown", (e) => {
+	if (window.luunaWorkbench && window.luunaWorkbench.isOpen()) {
+		if (e.key === "Escape") { e.preventDefault(); window.luunaWorkbench.close(); }
+		return;
+	}
 	// Second key of a Windows "menu mode" burst (bare Alt, then a plain letter
 	// delivered without altKey). This must run FIRST, and before armAltBurst()
 	// clears the armed flag:

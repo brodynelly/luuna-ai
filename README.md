@@ -133,7 +133,7 @@ The window has **no title bar at all**. It is created with `decorations: false`,
 
 Window affordances therefore live in the menu bar: drag its background (the empty space after `Help`) to move the window, and double-click that background to toggle maximize. `Alt+X` or `File → Exit` closes the app. Native **Save As** and **Change Directory** dialogs, a right-click **Copy/Paste/Select All** menu, and taskbar/dock app identity all still apply.
 
-Changing the directory from the File menu reconnects Pi in the selected project and starts a new backend session. If the new connection fails, the current project and session stay active.
+Changing the directory from the File menu reconnects Pi in the selected project and starts a new backend session. If spawning Pi fails, the current project and session stay active. Once the replacement starts, connection errors are reported in the selected project.
 
 ---
 
@@ -170,7 +170,7 @@ npm test        # cargo test
 
 ### Diagnostic probes
 
-`test/` holds **diagnostic scaffolds, not tests**. They drive the running app over the WebView2 CDP port and print a report of what the UI actually did.
+`test/` includes diagnostic probes and the automated `workbench-native-smoke.mjs` regression suite. The probes below inspect the running app over the WebView2 CDP port; the workbench suite launches a fresh release with disposable stores and synthetic Pi.
 
 ```bash
 # Launch the app with the debug port open
@@ -192,3 +192,11 @@ node test/cdp-shot.mjs shot.png
 
 MIT © 2026 Luuna-AI Contributors.
 Homage to Turbo Pascal © 1983-1997 Borland International, Inc.
+
+## Project component workbench
+
+Open **Tools → Kanban board**, **Prompt library**, or **Expertise memory**. These use the real Missions, Beacon and Atlas CLIs in separate LUUNA-AI private stores for each selected project. Initialize explicitly; existing project/runtime data is never imported. Insert into message appends selected context to your draft without sending it to Pi.
+
+Install **Bun 1.4.3** and Git, then run `npm run components:setup` to install pinned public source checkouts. Installed desktop builds can set `LUUNA_AI_COMPONENTS_ROOT` to this checkout's `.tools` directory and `LUUNA_AI_BUN` to the native Bun executable. Node is needed for setup/testing only. Source checkouts are verified on every operation.
+
+See [Component workbench](docs/COMPONENT-WORKBENCH.md) for architecture, store ownership, supported operations, prerequisites and validation. Run `npm run test:components` for real CLI lifecycle checks and `npm run test:workbench` for the Windows native smoke with synthetic Pi.

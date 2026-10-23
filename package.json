@@ -8,7 +8,10 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "check": "cargo check --manifest-path src-tauri/Cargo.toml",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "components:setup": "node scripts/setup-components.mjs",
+    "test:components": "cargo test --manifest-path src-tauri/Cargo.toml components_real -- --ignored --nocapture",
+    "test:workbench": "node test/workbench-native-smoke.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

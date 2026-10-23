@@ -6,6 +6,9 @@
 // "push:delta", "push:textPopup", "push:bootError").
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod component_runner;
+mod components;
+
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -97,6 +100,7 @@ struct Global {
 	next_id: AtomicU64,
 	app: Mutex<Option<AppHandle>>,
 	boot_once: Mutex<()>,
+	pi_generation: Mutex<u64>,
 }
 
 fn now_ms() -> u64 {
@@ -206,9 +210,39 @@ fn windows_cmd_line(command: &str, args: &[&str]) -> Result<String, String> {
 	let quoted: Vec<String> = args.iter().map(|a| format!("\"{}\"", a)).collect();
 	let suffix = if quoted.is_empty() { String::new() } else { format!(" {}", quoted.join(" ")) };
 	if command.chars().any(|c| c.is_whitespace()) {
-		Ok(format!("\"\"{}{}\"\"", command, suffix))
+		Ok(format!("\"\"{}\"{}\"", command, suffix))
 	} else {
 		Ok(format!("{}{}", command, suffix))
+	}
+}
+
+#[cfg(all(test, windows))]
+mod windows_launch_tests {
+	use super::windows_cmd_line;
+	use std::os::windows::process::CommandExt;
+	use std::process::Command;
+
+	#[test]
+	fn npm_shim_receives_exact_rpc_arguments_from_a_path_with_spaces() {
+		let root = tempfile::Builder::new().prefix("luuna rpc ").tempdir().unwrap();
+		let script = root.path().join("arguments.cjs");
+		let shim = root.path().join("pi shim.cmd");
+		std::fs::write(&script, "process.stdout.write(JSON.stringify(process.argv.slice(2)))").unwrap();
+		std::fs::write(&shim, format!("@node \"{}\" %*\r\n", script.display())).unwrap();
+		let args = ["--mode", "rpc", "--no-session"];
+		let command = windows_cmd_line(shim.to_str().unwrap(), &args).unwrap();
+		let output = Command::new("cmd.exe").args(["/d", "/s", "/c"])
+			.raw_arg(command).creation_flags(0x0800_0000).output().unwrap();
+		assert!(output.status.success(), "npm-style shim failed");
+		let actual: Vec<String> = serde_json::from_slice(&output.stdout).unwrap();
+		assert_eq!(actual, args);
+	}
+
+	#[test]
+	fn shell_metacharacters_remain_rejected() {
+		for value in ["pi&other", "pi|other", "pi%PATH%", "pi!x!", "pi\nother", "pi\"other"] {
+			assert!(windows_cmd_line(value, &["--mode", "rpc"]).is_err());
+		}
 	}
 }
 
@@ -220,7 +254,9 @@ fn spawn_pi(cwd: &str) -> Result<PiChild, String> {
 	{
 		use std::os::windows::process::CommandExt;
 		let cmdline = windows_cmd_line(&command, &args)?;
-		cmd.args(["/d", "/s", "/c", &cmdline]).creation_flags(0x0800_0000);
+		// cmd.exe parses its own command string. Rust's argv quoting would
+		// turn its quotes into literal backslash-quotes in the npm shim.
+		cmd.args(["/d", "/s", "/c"]).raw_arg(&cmdline).creation_flags(0x0800_0000);
 	}
 	#[cfg(not(windows))]
 	{
@@ -251,6 +287,8 @@ fn rpc_send(g: &Global, mut cmd: Value) -> Result<(), String> {
 }
 
 fn rpc_request(g: &Global, mut cmd: Value, timeout_ms: u64) -> Result<Value, String> {
+	// Register and send atomically with respect to retiring a connection.
+	let connection = g.pi_generation.lock().unwrap();
 	if !g.state.lock().unwrap().pi_alive {
 		return Ok(json!({"type": "response", "command": cmd["type"].clone(), "success": false, "error": "PI DISCONNECTED"}));
 	}
@@ -262,6 +300,7 @@ fn rpc_request(g: &Global, mut cmd: Value, timeout_ms: u64) -> Result<Value, Str
 		g.pending.lock().unwrap().remove(&id);
 		return Err(e);
 	}
+	drop(connection);
 	match rx.recv_timeout(Duration::from_millis(timeout_ms)) {
 		Ok(v) => Ok(v),
 		Err(_) => {
@@ -278,20 +317,27 @@ fn fail_pending(g: &Global, error: &str) {
 	}
 }
 
-fn kill_pi(g: &Global) {
-	let mut pi_guard = g.pi.lock().unwrap();
-	if let Some(mut pi) = pi_guard.take() {
-		pi.stdin = None;
-		let _ = pi.child.kill();
-		#[cfg(windows)]
-		{
-			let pid = pi.child.id();
-			if pid != 0 {
-				let _ = Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).creation_flags(0x0800_0000).spawn();
-			}
-		}
+fn stop_pi(mut pi: PiChild) {
+	pi.stdin = None;
+	#[cfg(windows)]
+	{
+		// Stop the owned tree while its root PID still identifies the tree.
+		let _ = Command::new("taskkill").args(["/PID", &pi.child.id().to_string(), "/T", "/F"])
+			.creation_flags(0x0800_0000).stdout(Stdio::null()).stderr(Stdio::null()).status();
 	}
-	g.state.lock().unwrap().pi_alive = false;
+	let _ = pi.child.kill();
+	let _ = pi.child.wait();
+}
+
+fn kill_pi(g: &Global) {
+	let old = {
+		let mut generation = g.pi_generation.lock().unwrap();
+		*generation += 1;
+		fail_pending(g, "PI DISCONNECTED");
+		g.state.lock().unwrap().pi_alive = false;
+		g.pi.lock().unwrap().take()
+	};
+	if let Some(old) = old { stop_pi(old); }
 }
 
 // ---------------------------------------------------------------------------
@@ -599,11 +645,34 @@ fn ensure_pi(g: &Global) -> Result<(), String> {
 		}
 	}
 	let cwd = g.state.lock().unwrap().cwd.clone();
+	connect_pi(g, spawn_pi(&cwd)?, None)
+}
+
+// Caller serializes startup with boot_once. The candidate is installed once,
+// then exactly one reader and the handshake use that same process.
+fn connect_pi(g: &Global, mut child: PiChild, new_cwd: Option<&str>) -> Result<(), String> {
 	let result = (|| -> Result<(), String> {
-		let mut child = spawn_pi(&cwd)?;
 		let stdout = child.child.stdout.take();
-		*g.pi.lock().unwrap() = Some(child);
-		g.state.lock().unwrap().pi_alive = true;
+		let (reader_generation, old) = {
+			let mut generation = g.pi_generation.lock().unwrap();
+			*generation += 1;
+			fail_pending(g, "PI CONNECTION REPLACED");
+			let old = g.pi.lock().unwrap().replace(child);
+			let mut st = g.state.lock().unwrap();
+			st.pi_alive = true;
+			st.pi_started = false;
+			if let Some(cwd) = new_cwd {
+				st.cwd = cwd.into();
+				st.models_cache = None;
+				st.recent_sessions.clear();
+				st.context_tokens = None;
+				st.is_streaming = false;
+				st.is_bash = false;
+				st.request_start = None;
+			}
+			(*generation, old)
+		};
+		if let Some(old) = old { stop_pi(old); }
 
 		// stdout reader thread
 		let g2 = g.app.lock().unwrap().clone().ok_or("app not ready")?;
@@ -614,6 +683,8 @@ fn ensure_pi(g: &Global) -> Result<(), String> {
 			std::thread::spawn(move || {
 				let reader = BufReader::new(stdout);
 				for line in reader.lines() {
+					let generation = g2.pi_generation.lock().unwrap();
+					if *generation != reader_generation { return; }
 					match line {
 						Ok(l) => {
 							let msg: Value = match serde_json::from_str(l.trim()) {
@@ -641,6 +712,9 @@ fn ensure_pi(g: &Global) -> Result<(), String> {
 						Err(_) => break,
 					}
 				}
+				// Check and apply EOF effects under the same replacement guard.
+				let generation = g2.pi_generation.lock().unwrap();
+				if *generation != reader_generation { return; }
 				// process ended
 				g2.state.lock().unwrap().pi_alive = false;
 				fail_pending(&g2, "PI DISCONNECTED");
@@ -1482,6 +1556,44 @@ fn fail_msg(error: impl std::fmt::Display) -> CmdResult {
 	Ok(json!({"success": false, "error": error.to_string()}))
 }
 
+fn workbench_workspace(app: &AppHandle, g: &Global) -> Result<components::Workspace, String> {
+	let cwd = g.state.lock().unwrap().cwd.clone();
+	let root = match std::env::var_os("LUUNA_AI_WORKBENCH_ROOT") {
+		Some(path) => std::path::PathBuf::from(path),
+		None => app.path().app_data_dir().map_err(|_| "Application data directory unavailable.")?.join("workbench"),
+	};
+	components::Workspace::new(root, &cwd)
+}
+#[tauri::command]
+async fn luuna_workbench_status(app: AppHandle, g: tauri::State<'_, Arc<Global>>) -> CmdResult {
+	let _lock = components::LOCK.lock().await;
+	match workbench_workspace(&app, &g).and_then(|ws| ws.status()) { Ok(v)=>ok_data(v), Err(e)=>fail_msg(e) }
+}
+#[tauri::command]
+async fn luuna_workbench_initialize(app: AppHandle, g: tauri::State<'_, Arc<Global>>, project_key: String) -> CmdResult {
+	let _lock = components::LOCK.lock().await;
+	let result = async {
+		let ws = workbench_workspace(&app, &g)?;
+		ws.check_key(&project_key)?;
+		let runner = component_runner::Components::discover().map_err(|e| e.to_string())?;
+		ws.initialize(&runner).await
+	}.await;
+	match result { Ok(v)=>ok_data(v), Err(e)=>fail_msg(e) }
+}
+#[tauri::command]
+async fn luuna_workbench_action(app: AppHandle, g: tauri::State<'_, Arc<Global>>, project_key: String, action: Value) -> CmdResult {
+	let _lock = components::LOCK.lock().await;
+	let result = async {
+		let ws = workbench_workspace(&app, &g)?;
+		ws.check_key(&project_key)?;
+		let action: components::Action = serde_json::from_value(action).map_err(|_| "Invalid workbench action or unsupported fields.".to_owned())?;
+		let runner = component_runner::Components::discover().map_err(|e| e.to_string())?;
+		let data = ws.action(&runner, action).await?;
+		Ok::<Value,String>(json!({"projectKey":ws.key,"result":data}))
+	}.await;
+	match result { Ok(v)=>ok_data(v), Err(e)=>fail_msg(e) }
+}
+
 #[tauri::command]
 async fn luuna_boot(app: AppHandle, g: tauri::State<'_, Arc<Global>>) -> CmdResult {
 	let _ = &app;
@@ -1924,6 +2036,7 @@ async fn luuna_save_session_file(g: tauri::State<'_, Arc<Global>>, filename: Str
 
 #[tauri::command]
 async fn luuna_change_directory(g: tauri::State<'_, Arc<Global>>, new_dir: String) -> CmdResult {
+	let _workbench_lock = components::LOCK.lock().await;
 	if g.state.lock().unwrap().is_streaming || g.state.lock().unwrap().is_bash {
 		return fail_msg("Finish or abort the active operation before changing directory");
 	}
@@ -1936,7 +2049,8 @@ async fn luuna_change_directory(g: tauri::State<'_, Arc<Global>>, new_dir: Strin
 		return ok_data(json!({"unchanged": true, "cwd": target}));
 	}
 	flash(&g, &format!("Connecting Pi in {}...", target));
-	// Start a candidate client by swapping the current one out temporarily.
+	// Serialize process lifecycle; a failed spawn leaves the old connection intact.
+	let _startup = g.boot_once.lock().unwrap();
 	let candidate = match spawn_pi(&target) {
 		Ok(c) => c,
 		Err(e) => {
@@ -1944,28 +2058,7 @@ async fn luuna_change_directory(g: tauri::State<'_, Arc<Global>>, new_dir: Strin
 			return fail_msg(e);
 		}
 	};
-	let old = g.pi.lock().unwrap().replace(candidate);
-	if let Some(mut old) = old {
-		old.stdin = None;
-		let _ = old.child.kill();
-	}
-	// Restart reader machinery on the new process: simplest reliable path is
-	// to restart the whole client state (reader thread watches pi_alive).
-	{
-		let mut st = g.state.lock().unwrap();
-		st.cwd = target.clone();
-		st.pi_alive = true;
-		st.pi_started = false;
-		st.models_cache = None;
-		st.recent_sessions.clear();
-		st.context_tokens = None;
-		st.is_streaming = false;
-		st.is_bash = false;
-		st.request_start = None;
-	}
-	// The old reader thread terminated with the old process; spawn a fresh one.
-	restart_reader(&g);
-	match ensure_pi(&g) {
+	match connect_pi(&g, candidate, Some(&target)) {
 		Ok(()) => {
 			push_entry(&g, json!({"kind": "__clear__", "text": ""}));
 			let st = g.state.lock().unwrap();
@@ -1978,41 +2071,6 @@ async fn luuna_change_directory(g: tauri::State<'_, Arc<Global>>, new_dir: Strin
 		Err(e) => {
 			push_entry(&g, json!({"kind": "error", "text": format!("Change directory failed: {}", e), "tag": "[ERROR]", "isError": true}));
 			fail_msg(e)
-		}
-	}
-}
-
-fn restart_reader(g: &Global) {
-	if let Some(app) = g.app.lock().unwrap().clone() {
-		let g2 = app.state::<Arc<Global>>().inner().clone();
-		let pending = g.pending.clone();
-		let stdout = g.pi.lock().unwrap().as_mut().and_then(|pi| pi.child.stdout.take());
-		if let Some(stdout) = stdout {
-			std::thread::spawn(move || {
-				let reader = BufReader::new(stdout);
-				for line in reader.lines() {
-					match line {
-						Ok(l) => {
-							let msg: Value = match serde_json::from_str(l.trim()) {
-								Ok(v) => v,
-								Err(_) => continue,
-							};
-							if msg["type"] == json!("response") {
-								if let Some(id) = str_field(&msg, "id") {
-									let tx = pending.lock().unwrap().remove(&id);
-									if let Some(tx) = tx {
-										let _ = tx.send(msg);
-										continue;
-									}
-								}
-							} else {
-								handle_rpc_event(&g2, msg);
-							}
-						}
-						Err(_) => break,
-					}
-				}
-			});
 		}
 	}
 }
@@ -2206,6 +2264,7 @@ fn main() {
 		next_id: AtomicU64::new(1),
 		app: Mutex::new(None),
 		boot_once: Mutex::new(()),
+		pi_generation: Mutex::new(0),
 	});
 
 	tauri::Builder::default()
@@ -2227,6 +2286,7 @@ fn main() {
 			}
 		})
 		.invoke_handler(tauri::generate_handler![
+			luuna_workbench_status, luuna_workbench_initialize, luuna_workbench_action,
 			luuna_boot, luuna_prompt, luuna_abort, luuna_run_command, luuna_get_state, luuna_get_stats,
 			luuna_get_models, luuna_reload_models, luuna_set_model, luuna_cycle_model,
 			luuna_set_thinking_level, luuna_cycle_thinking_level, luuna_set_plan_mode,

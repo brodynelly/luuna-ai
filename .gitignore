@@ -9,3 +9,9 @@ Thumbs.db
 # Rust / Tauri build artifacts
 src-tauri/target/
 src-tauri/gen/schemas
+
+# Local AI workflow evidence
+.tac/runs/
+.tac/events.jsonl
+
+.tools/

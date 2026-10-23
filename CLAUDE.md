@@ -34,11 +34,11 @@ npm run build -- --target universal-apple-darwin
 
 ### The Rust backend (`src-tauri/src/main.rs`)
 
-One file, ~2250 lines, organised as: RPC plumbing → state → commands → the `pi` subprocess.
+`main.rs` retains the Pi desktop; `components.rs` owns standalone workbench operations and workspace identity, and `component_runner.rs` owns bounded native CLI processes. Main is organised as: RPC plumbing → state → commands → the `pi` subprocess.
 
 - **`luuna_*` commands** are the Tauri IPC surface. Every one maps 1:1 onto a `window.luuna` method in the renderer.
 - **Push events**: `push:state`, `push:entry`, `push:delta`, `push:textPopup`, `push:bootError`. The renderer subscribes to these; it never polls.
-- **`spawn_pi`** starts `pi --mode rpc`. On Windows it goes through `cmd.exe /d /s /c` with `windowsVerbatimArguments` (npm `.cmd` shims are not executable directly) and every argument is rejected if it contains `" \r\n&|<>^%!`. On macOS `pi` is executed directly.
+- **`spawn_pi`** starts `pi --mode rpc`. On Windows it goes through `cmd.exe /d /s /c` with Rust `raw_arg` for the validated command string (npm `.cmd` shims are not executable directly) and every argument is rejected if it contains `" \r\n&|<>^%!`. On macOS `pi` is executed directly.
 - **Cross-platform code** is gated with `#[cfg(windows)]` / `#[cfg(target_os = "macos")]` — clipboard uses `clip` vs `pbcopy`, "show in folder" uses `explorer /select,` vs `open -R`. Keep new platform-specific code behind the same gates.
 - **Tauri config** is split: `tauri.conf.json` is shared, `tauri.windows.conf.json` builds an NSIS installer (no WiX needed), `tauri.macos.conf.json` builds an `.app` and `.dmg`. Do not hardcode one platform's bundle target in the shared config.
 
@@ -62,9 +62,9 @@ Changing a menu item, mnemonic, shortcut or action ID means editing both, or the
 
 ## Testing
 
-`cargo test` (no Rust tests yet) and the `npm run check` / `npm test` scripts above.
+`cargo test` (component unit tests; real CLI lifecycle is opt-in through `npm run test:components`) and the `npm run check` / `npm test` scripts above.
 
-`test/` holds **diagnostic scaffolds, not tests**. `test/probe-live-cdp.mjs` inspects the running app's real DOM over the WebView2 CDP port; `test/cdp-eval.mjs` evaluates an expression in it; `test/cdp-shot.mjs` captures a PNG of the app's own rendered surface. They need the app launched with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`, and they are deliberately kept out of the test glob.
+`test/` includes diagnostic probes and the automated `workbench-native-smoke.mjs` regression suite. `test/probe-live-cdp.mjs` inspects the running app's real DOM over the WebView2 CDP port; `test/cdp-eval.mjs` evaluates an expression in it; `test/cdp-shot.mjs` captures a PNG of the app's own rendered surface. These probes need the app launched with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`. Run the separate workbench suite through `npm run test:workbench` after building.
 
 ## Configuration and environment
 
@@ -83,3 +83,9 @@ Changing a menu item, mnemonic, shortcut or action ID means editing both, or the
 - The UI theme is a fixed 16-colour DOS palette. Do not introduce arbitrary colours; add a named entry to the palette instead.
 - The app must not bundle a browser. Keep using the OS WebView.
 - `prompt.txt` and the original Turbo Pascal spec are not part of this repository.
+
+### Component workbench
+
+`renderer/workbench.js` and `.css` provide the three DOS views via `luuna.workbenchStatus`, `workbenchInitialize` and `workbenchAction`; their Tauri counterparts are registered in main.rs. The operation enum is closed; never accept arbitrary CLI arguments/paths from the renderer. Keep all record writes in public CLIs, and never adopt sibling/runtime stores. See `docs/COMPONENT-WORKBENCH.md` and the embedded `components/manifest.json` pins.
+
+Validation: `npm run components:setup`, `npm run check`, `npm test`, `npm run test:components`, `npm run build`, `npm run test:workbench`. The native smoke uses real WebView2/Tauri and CLIs with synthetic Pi, never paid provider calls. Only Windows native behavior is verified here.
