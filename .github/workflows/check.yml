@@ -40,5 +40,14 @@ jobs:
       - name: Type-check the Rust backend
         run: npm run check
 
+      - name: Syntax-check the renderer modules
+        run: npm run check:js
+
+      - name: Run the Rust unit tests
+        run: npm test
+
+      - name: Run the renderer unit tests
+        run: npm run test:js
+
       - name: Build the app
         run: npm run build -- --no-bundle

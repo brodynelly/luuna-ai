@@ -2,13 +2,16 @@
   "name": "luuna-ai",
   "version": "1.0.2",
   "description": "LUUNA-AI desktop — Turbo Pascal 7 / DOS styled native frontend for the Pi coding agent",
-  "type": "module",
+  "type": "commonjs",
   "license": "MIT",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
     "check": "cargo check --manifest-path src-tauri/Cargo.toml",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+    "check:js": "node --check renderer/keymap.js && node --check renderer/themes.js && node --check renderer/config.js && node --check renderer/renderer.js && node --check renderer/luuna-provider.js",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:js": "node --test test/keymap.test.js test/config.test.js test/themes.test.js test/keyboard.test.js",
+    "check:all": "npm run check && npm run check:js && npm test && npm run test:js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

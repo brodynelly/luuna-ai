@@ -141,6 +141,15 @@ body {
 #desktop.zoom-tree { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 #desktop.zoom-tree #win-tree { grid-column: 1; grid-row: 1; }
 
+/* The file tree can be hidden (Mod+B). The layout lives here, in the
+   stylesheet — the toggle only flips the class. */
+#desktop.no-tree { grid-template-columns: 1fr; }
+#desktop.no-tree #win-tree { display: none; }
+#desktop.no-tree #win-agent { grid-column: 1; grid-row: 1; }
+#desktop.no-tree #win-input { grid-column: 1; grid-row: 2; }
+/* A zoomed tree wins over the hidden one. */
+#desktop.zoom-tree #win-tree { display: flex; }
+
 /* ------------------------------------------------------------------ windows */
 
 .window {
@@ -459,3 +468,94 @@ body {
 
 /* boot error box */
 .boot-error { color: var(--lred); }
+
+/* ------------------------------------------------------- command palette */
+
+.dialog .palette-body { display: flex; flex-direction: column; gap: 6px; white-space: normal; }
+.dialog .palette-search { flex: 0 0 auto; }
+.dialog .palette-list { max-height: 46vh; overflow: auto; }
+.dialog .palette-section {
+	color: var(--brown);
+	font-weight: bold;
+	padding: 8px 6px 2px;
+}
+.dialog .palette-row .plabel { flex: 1 1 auto; }
+
+/* The chord of an action, on the right of the row. */
+.dialog .listrow .sc { margin-left: auto; color: var(--dgray); }
+.dialog .listrow.sel .sc { color: var(--black); }
+
+/* ------------------------------------------------------------ theme picker */
+
+.dialog .theme-body { white-space: normal; }
+.dialog .theme-list { max-height: 50vh; overflow: auto; }
+.dialog .theme-row .tname { color: var(--black); }
+.dialog .theme-row .tsub { color: var(--dgray); }
+.dialog .theme-row.sel .tname { color: var(--white); }
+.dialog .theme-row.sel .tsub { color: var(--white); }
+.dialog .theme-row.active .tname { font-weight: bold; }
+.dialog .theme-swatches { margin-left: auto; display: inline-flex; gap: 1px; }
+.dialog .theme-swatch {
+	display: inline-block;
+	width: 10px;
+	height: 12px;
+	border: 1px solid var(--dgray);
+}
+
+/* -------------------------------------------------------- settings dialog */
+
+.dialog .settings-body { white-space: normal; }
+.dialog .settings-layout { display: flex; gap: 14px; align-items: stretch; min-height: 340px; }
+.dialog .settings-sections {
+	flex: 0 0 140px;
+	border-right: 1px solid var(--dgray);
+	padding-right: 6px;
+}
+.dialog .settings-content { flex: 1 1 auto; min-width: 0; max-height: 54vh; overflow: auto; }
+.dialog .settings-section { display: block; padding-left: 4px; }
+.dialog .settings-section.cur { color: var(--brown); font-weight: bold; }
+.dialog .settings-note { margin: 8px 0; }
+.dialog .settings-path { color: var(--dgray); }
+.dialog .settings-errors { color: var(--lred); }
+.dialog .settings-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 4px; }
+.dialog .settings-buttons .dlg-btn { padding: 1px 10px; }
+.dialog .settings-buttons .dlg-btn.focused { color: var(--white); }
+.dialog .dlg-field.focused .fvalue { color: var(--yellow); outline: 1px solid var(--dgray); }
+.dialog .stepper { display: inline-flex; gap: 8px; align-items: center; }
+.dialog .stepper .sbtn { color: var(--black); cursor: pointer; }
+.dialog .stepper .sbtn:hover { color: var(--white); }
+
+/* ------------------------------------------------------------ keybindings */
+
+.dialog .kb-search { width: 100%; }
+.dialog .kb-list { max-height: 40vh; overflow: auto; margin-top: 6px; }
+.dialog .kb-group { color: var(--brown); font-weight: bold; padding: 8px 6px 2px; }
+.dialog .kb-row .klabel { flex: 1 1 auto; }
+.dialog .kb-row .korigin { color: var(--dgray); font-size: 0.8em; letter-spacing: 0.04em; margin-right: 8px; }
+.dialog .kb-row.kb-grouprow .klabel { color: var(--lcyan); }
+.dialog .kb-row.kb-grouprow.expanded .klabel { color: var(--yellow); }
+.dialog .kb-row.recording .sc { color: var(--red); font-weight: bold; }
+.dialog .kb-msg { margin-top: 6px; min-height: 1.2em; }
+.dialog .kb-notes { margin: 4px 0 8px; }
+.dialog .kb-notes .dline { margin: 1px 0; }
+
+/* ---------------------------------------------------------- composer menus */
+
+.dialog.composer-popup { top: auto; bottom: 24vh; transform: translate(-50%, 0); }
+.dialog .composer-body { white-space: normal; }
+.dialog .cm-list { max-height: 40vh; overflow: auto; }
+
+/* ----------------------------------------------------------- find in chat */
+
+.dialog .find-body { white-space: normal; }
+.dialog .find-status { margin-top: 6px; }
+
+.entry-user.find-hit,
+.entry-agent.find-hit,
+.entry-thinking.find-hit,
+.entry-tool.find-hit,
+.entry-error.find-hit,
+.entry-info.find-hit {
+	background: var(--brown);
+	color: var(--white);
+}

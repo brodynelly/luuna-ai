@@ -17,6 +17,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use chrono::TimeZone;
 
+mod config;
+
 fn project_root() -> String {
 	env!("CARGO_MANIFEST_DIR").replace("\\src-tauri", "").replace("/src-tauri", "")
 }
@@ -2159,6 +2161,22 @@ async fn luuna_show_in_folder(p: String) -> CmdResult {
 	ok_data(json!(true))
 }
 
+/// Open a *directory* in the OS file browser. `luuna_show_in_folder` selects a
+/// file inside its parent, which is the wrong behaviour for the settings UI's
+/// "open the .luuna folder" buttons.
+#[tauri::command]
+async fn luuna_open_folder(p: String) -> CmdResult {
+	#[cfg(windows)]
+	{
+		let _ = Command::new("explorer").arg(&p).spawn();
+	}
+	#[cfg(target_os = "macos")]
+	{
+		let _ = Command::new("open").arg(&p).spawn();
+	}
+	ok_data(json!(true))
+}
+
 #[tauri::command]
 async fn luuna_save_dialog(default_name: String) -> CmdResult {
 	let file = rfd::FileDialog::new()
@@ -2192,6 +2210,99 @@ async fn luuna_context_menu() -> CmdResult {
 async fn luuna_exit(app: AppHandle) -> CmdResult {
 	app.exit(0);
 	ok_data(json!(true))
+}
+
+// ---------------------------------------------------------------------------
+// Configuration — the `.luuna/` tiers, user themes and keybindings
+//
+// The pure logic lives in `config.rs`; these are thin wrappers around it.
+// The project tier follows `AppState.cwd`, so it travels with the repo and is
+// re-read after a directory change (no caching happens here).
+// ---------------------------------------------------------------------------
+
+/// The effective configuration: the merged settings of both tiers, the
+/// settings of each tier on their own, the user-discovered themes and the
+/// directory layout.
+#[tauri::command]
+async fn luuna_get_config(g: tauri::State<'_, Arc<Global>>) -> CmdResult {
+	let cwd = g.state.lock().unwrap().cwd.clone();
+	let (settings, mut errors) = config::load_settings(&cwd);
+	let (global_tier, project_tier, tier_errors) = config::load_tier_settings(&cwd);
+	errors.extend(tier_errors);
+	let (themes, theme_errors) = config::load_themes(&cwd);
+	errors.extend(theme_errors);
+	ok_data(json!({
+		"settings": settings,
+		"tiers": { "global": global_tier, "project": project_tier },
+		"themes": themes,
+		"errors": errors,
+		"paths": config::paths_json(&cwd),
+	}))
+}
+
+/// Write a patch into one settings file of one tier.
+///
+/// The scope (`global` / `project`) and the file name (`appearance` /
+/// `keybindings` / `app`) are validated here, and every chord of a keybindings
+/// patch is canonicalised, so a malformed binding is rejected at the boundary.
+///
+/// `replace` makes the value the whole file instead of a merge — that is what
+/// the "reset to defaults" button needs, because a merge can never remove a
+/// key.
+#[tauri::command]
+async fn luuna_set_config(
+	g: tauri::State<'_, Arc<Global>>,
+	scope: String,
+	file: String,
+	value: Value,
+	replace: Option<bool>,
+) -> CmdResult {
+	let cwd = g.state.lock().unwrap().cwd.clone();
+	// Validates the scope and the file name.
+	if let Err(e) = config::settings_path(&scope, &file, &cwd) {
+		return fail_msg(e);
+	}
+	let patch = if file == "keybindings" {
+		match config::canonicalize_keybindings(&value) {
+			Ok(v) => v,
+			Err(e) => return fail_msg(e),
+		}
+	} else {
+		if !value.is_object() {
+			return fail_msg(format!("the {} settings must be a JSON object", file));
+		}
+		value
+	};
+	match config::write_settings(&scope, &file, &patch, &cwd, replace.unwrap_or(false)) {
+		Ok((path, merged)) => ok_data(json!({"path": path.to_string_lossy(), "value": merged})),
+		Err(e) => fail_msg(e),
+	}
+}
+
+/// The user-discovered themes of both tiers (the project tier shadows the
+/// global one by id) plus the notes about the files that were skipped.
+#[tauri::command]
+async fn luuna_list_themes(g: tauri::State<'_, Arc<Global>>) -> CmdResult {
+	let cwd = g.state.lock().unwrap().cwd.clone();
+	let (themes, errors) = config::load_themes(&cwd);
+	ok_data(json!({"themes": themes, "errors": errors}))
+}
+
+/// One theme definition, looked up by id in both tiers.
+#[tauri::command]
+async fn luuna_read_theme(g: tauri::State<'_, Arc<Global>>, id: String) -> CmdResult {
+	let cwd = g.state.lock().unwrap().cwd.clone();
+	match config::find_theme(&cwd, &id) {
+		Ok(theme) => ok_data(theme),
+		Err(e) => fail_msg(e),
+	}
+}
+
+/// The directory layout of both tiers, for the Config section of the UI.
+#[tauri::command]
+async fn luuna_config_paths(g: tauri::State<'_, Arc<Global>>) -> CmdResult {
+	let cwd = g.state.lock().unwrap().cwd.clone();
+	ok_data(config::paths_json(&cwd))
 }
 
 // ---------------------------------------------------------------------------
@@ -2237,7 +2348,10 @@ fn main() {
 			luuna_git_log, luuna_git_grep, luuna_save_session_file, luuna_change_directory,
 			luuna_get_sessions, luuna_open_session, luuna_get_providers, luuna_write_env_key,
 			luuna_add_custom_model, luuna_system_info, luuna_copy_to_clipboard, luuna_show_in_folder,
+			luuna_open_folder,
 			luuna_save_dialog, luuna_open_dir_dialog, luuna_context_menu, luuna_exit,
+			luuna_get_config, luuna_set_config, luuna_list_themes, luuna_read_theme,
+			luuna_config_paths,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

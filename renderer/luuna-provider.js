@@ -55,6 +55,7 @@
 		systemInfo: () => invoke("luuna_system_info"),
 		copyToClipboard: (text) => invoke("luuna_copy_to_clipboard", { text }),
 		showInFolder: (p) => invoke("luuna_show_in_folder", { p }),
+		openFolder: (p) => invoke("luuna_open_folder", { p }),
 		saveDialog: async (defaultName) => {
 			const res = await invoke("luuna_save_dialog", { defaultName });
 			if (res && typeof res === "object" && "success" in res) {
@@ -71,6 +72,15 @@
 		},
 		contextMenu: () => invoke("luuna_context_menu"),
 		exit: () => invoke("luuna_exit"),
+		// Configuration — the `.luuna/` tiers, user themes and keybindings.
+		getConfig: () => invoke("luuna_get_config"),
+		// `replace` makes the value the whole file instead of a merge; it is
+		// omitted rather than sent as `undefined`, which Tauri would reject.
+		setConfig: (scope, file, value, replace) =>
+			invoke("luuna_set_config", replace === undefined ? { scope, file, value } : { scope, file, value, replace }),
+		listThemes: () => invoke("luuna_list_themes"),
+		readTheme: (id) => invoke("luuna_read_theme", { id }),
+		configPaths: () => invoke("luuna_config_paths"),
 		on: (channel, listener) => {
 			let unlisten = null;
 			listen(channel, (event) => listener(event.payload)).then((u) => { unlisten = u; });
